@@ -152,6 +152,7 @@ details.tori>summary::after{content:"Show / hide";font-weight:500;color:var(--mu
   <div class="sectionhead">
     <h2>Saved customers <span class="pill" id="count">0</span></h2>
     <div class="cardbtns">
+      <button class="btn small" id="retry" type="button">Send unsent</button>
       <button class="btn small" id="copyAll" type="button">Copy all notes</button>
     </div>
   </div>
@@ -266,7 +267,7 @@ details.tori>summary::after{content:"Show / hide";font-weight:500;color:var(--mu
     s.appendChild(h("span",{"class":"pill",text:customers.length+" captured"}));
     s.appendChild(h("span",{"class":"pill"+(withT>=2?" ok":""),text:withT+" of 2 Tori chats (due Thu 8 Oct)"}));
     var un=customers.filter(function(c){return c.sync!=="sent"&&c.sync!=="unconfirmed"}).length;
-    if(HOOK_URL&&un)s.appendChild(h("span",{"class":"pill",text:un+" not sent to Connect"}));
+    if(HOOK_URL&&un)s.appendChild(h("span",{"class":"pill",text:un+" not sent yet"}));
     $("count").textContent=customers.length;
   }
   function renderList(){
@@ -279,7 +280,7 @@ details.tori>summary::after{content:"Show / hide";font-weight:500;color:var(--mu
       if(c.sms)tags.push(h("span",{"class":"tag "+(c.sms==="Yes"?"yes":c.sms==="No"?"no":"maybe"),text:"SMS: "+c.sms}));
       (c.migProducts||[]).forEach(function(p){tags.push(h("span",{"class":"tag",text:"Migrating "+p}))});
       (c.interested||[]).forEach(function(p){tags.push(h("span",{"class":"tag",text:p}))});
-      var sl={sent:"Saved and sent",unconfirmed:"Sent (no reply visible)",failed:"Not sent",pending:"Sending...",local:"Saved in this browser"}[c.sync||"local"];
+      var sl={sent:"Sent, page being created",unconfirmed:"Sent (no reply seen)",failed:"Not sent yet",pending:"Sending...",local:"Saved in this browser"}[c.sync||"local"];
       tags.push(h("span",{"class":"tag "+((c.sync==="sent"||c.sync==="unconfirmed")?"yes":"maybe"),text:sl}));
       if(c.demo==="Yes")(c.demoProducts||[]).forEach(function(p){tags.push(h("span",{"class":"tag yes",text:"Demo: "+p}))});
       else if(c.demo==="No")tags.push(h("span",{"class":"tag",text:"No demo"}));
@@ -299,7 +300,7 @@ details.tori>summary::after{content:"Show / hide";font-weight:500;color:var(--mu
       L.appendChild(h("div",{"class":"card"+(editingId===c.id?" editing":"")},kids));
     });
   }
-  $("backupTop").addEventListener("click",backup);
+  $("backupTop").addEventListener("click",backup);$("retry").addEventListener("click",retryAll);
   $("copyAll").addEventListener("click",function(){if(!customers.length){toast("Nothing to copy yet");return}copy(customers.map(summary).join("\n\n---\n\n"),"All notes copied")});
 
 
@@ -321,11 +322,17 @@ details.tori>summary::after{content:"Show / hide";font-weight:500;color:var(--mu
       return fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=UTF-8"},body:body}).then(function(){c.sync="unconfirmed"},function(){c.sync="failed"});
     }).then(function(){persist();renderList();if(c.sync==="failed")toast("Saved here. Not sent to Connect yet")});
   }
+  function retryAll(){
+    var todo=customers.filter(function(c){return c.sync!=="sent"&&c.sync!=="unconfirmed"});
+    if(!todo.length){toast("Everything is sent");return}
+    toast("Sending "+todo.length+"...");
+    todo.reduce(function(p,c){return p.then(function(){return send(c,"create")})},Promise.resolve());
+  }
   function backup(){
     var blob=new Blob([JSON.stringify(customers,null,2)],{type:"application/json"});
     var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="booth-capture-backup.json";document.body.appendChild(a);a.click();a.remove();
   }
-  var HOOK_URL=""; /* leave empty: notes stay in this browser */
+  var HOOK_URL="https://event.scriptrunnerconnect.com/booth-info";
 
   /* start */
   try{customers=JSON.parse(localStorage.getItem("boothCustomers")||"[]")}catch(e){customers=[]}
